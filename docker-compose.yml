@@ -1,0 +1,77 @@
+# Hermes Agent — Docker Compose Stack
+# Docs: https://hermes-agent.nousresearch.com/docs/user-guide/docker
+# GitHub: https://github.com/nousresearch/hermes-agent
+#
+# Security posture:
+#   - Ports bound to HERMES_BIND_ADDR (127.0.0.1 by default — localhost only)
+#   - Only two host directories are mounted: HERMES_DATA_DIR and HERMES_WORKSPACE_DIR
+#   - No privileged mode; no host network
+#   - Hard resource limits on both containers
+#   - Services communicate over an isolated internal bridge network
+
+services:
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes
+    restart: unless-stopped
+    command: gateway run
+    ports:
+      - "${HERMES_BIND_ADDR:-127.0.0.1}:${HERMES_GATEWAY_PORT:-8642}:8642"
+    volumes:
+      # Config, memory, sessions, skills — agent's persistent state
+      - type: bind
+        source: ${HERMES_DATA_DIR:?HERMES_DATA_DIR must be set in .env}
+        target: /opt/data
+      # Workspace — files the agent may read/write on the host
+      - type: bind
+        source: ${HERMES_WORKSPACE_DIR:?HERMES_WORKSPACE_DIR must be set in .env}
+        target: /opt/data/workspace
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    networks:
+      - hermes-internal
+    shm_size: ${HERMES_SHM_SIZE:-1g}
+    deploy:
+      resources:
+        limits:
+          memory: ${HERMES_MEMORY_LIMIT:-4G}
+          cpus: "${HERMES_CPU_LIMIT:-2.0}"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8642/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  hermes-dashboard:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-dashboard
+    restart: unless-stopped
+    command: dashboard --host 0.0.0.0
+    ports:
+      - "${HERMES_BIND_ADDR:-127.0.0.1}:${HERMES_DASHBOARD_PORT:-9119}:9119"
+    volumes:
+      # Read-only: dashboard only reads agent state, never writes
+      - type: bind
+        source: ${HERMES_DATA_DIR:?HERMES_DATA_DIR must be set in .env}
+        target: /opt/data
+        read_only: true
+    environment:
+      # Points to the internal service name — never exposed to the host
+      - GATEWAY_HEALTH_URL=http://hermes:8642
+      - GATEWAY_HEALTH_TIMEOUT=3
+    networks:
+      - hermes-internal
+    depends_on:
+      hermes:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: ${HERMES_DASHBOARD_MEMORY_LIMIT:-512M}
+          cpus: "${HERMES_DASHBOARD_CPU_LIMIT:-0.5}"
+
+networks:
+  hermes-internal:
+    driver: bridge
