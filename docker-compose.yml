@@ -27,6 +27,11 @@ services:
         source: ${HERMES_WORKSPACE_DIR:?HERMES_WORKSPACE_DIR must be set in .env}
         target: /opt/data/workspace
     environment:
+      # Hermes reads its own credentials from /opt/data/.env (i.e. ~/.hermes/.env).
+      # Run 'docker run -it --rm -v ~/.hermes:/opt/data nousresearch/hermes-agent setup'
+      # to configure LLM keys, Telegram token, allowed users, etc.
+      # The variables below are optional overrides — they take lower precedence
+      # than /opt/data/.env for keys Hermes manages itself.
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     networks:
@@ -38,17 +43,22 @@ services:
           memory: ${HERMES_MEMORY_LIMIT:-4G}
           cpus: "${HERMES_CPU_LIMIT:-2.0}"
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8642/health"]
-      interval: 30s
+      # Port 8642 only opens when an LLM provider is fully configured.
+      # Check gateway.pid instead — written as soon as the process is running.
+      test: ["CMD", "python3", "-c", "import json,os; d=json.load(open('/opt/data/gateway.pid')); os.kill(d['pid'], 0)"]
+      interval: 15s
       timeout: 5s
-      retries: 3
-      start_period: 15s
+      retries: 4
+      start_period: 30s
 
   hermes-dashboard:
     image: nousresearch/hermes-agent:latest
     container_name: hermes-dashboard
     restart: unless-stopped
-    command: dashboard --host 0.0.0.0
+    # --insecure is required to bind 0.0.0.0 inside the container.
+    # Security is enforced at the host layer: HERMES_BIND_ADDR=127.0.0.1
+    # means the port is never reachable beyond localhost on the host machine.
+    command: dashboard --host 0.0.0.0 --insecure
     ports:
       - "${HERMES_BIND_ADDR:-127.0.0.1}:${HERMES_DASHBOARD_PORT:-9119}:9119"
     volumes:

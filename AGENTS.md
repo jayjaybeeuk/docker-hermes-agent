@@ -101,6 +101,62 @@ Avoid mounting Windows NTFS paths (`/mnt/c/...`) for the data dir — `chmod 700
 
 ---
 
+## Migrating data between machines (Mac ↔ Windows)
+
+All Hermes state lives in `HERMES_DATA_DIR` (`~/.hermes/` by default) on the host. It is plain files — fully portable.
+
+### Steps
+
+**1. On the source machine — stop the stack and archive the data dir:**
+```bash
+make down
+tar -czf hermes-data-backup.tar.gz -C ~ .hermes
+```
+
+**2. Copy the archive to the target machine** (USB, cloud storage, `scp`, etc.)
+
+**3. On the target machine — extract:**
+
+macOS / Linux:
+```bash
+mkdir -p ~/.hermes
+tar -xzf hermes-data-backup.tar.gz -C ~
+```
+
+Windows (WSL2 — run inside WSL2 terminal):
+```bash
+mkdir -p ~/.hermes
+tar -xzf hermes-data-backup.tar.gz -C ~
+```
+
+**4. Update `HERMES_DATA_DIR` and `HERMES_WORKSPACE_DIR` in the new machine's `.env`:**
+```
+HERMES_DATA_DIR=/home/youruser/.hermes
+HERMES_WORKSPACE_DIR=/home/youruser/.hermes/workspace
+```
+
+**5. Check `~/.hermes/config.yaml` for absolute paths** (e.g. `terminal.cwd`, `skills.external_dirs`) and update them to match the new machine's filesystem.
+
+**6. Start the stack:**
+```bash
+make setup   # creates dirs if missing, sets permissions
+make up
+```
+
+### What transfers
+
+| Transfers with the archive | Does not transfer |
+|---|---|
+| Memories, sessions, skills | Container image (re-pulled automatically) |
+| Credentials, config, personality (`SOUL.md`) | Any data outside `HERMES_DATA_DIR` |
+| Cron jobs, hooks, logs | Host-specific absolute paths in `config.yaml` |
+
+### Windows (WSL2) path note
+
+Use Linux-style paths inside the WSL2 filesystem — avoid `/mnt/c/...` NTFS mounts. `chmod 700` (applied by `setup.sh`) does not behave correctly on NTFS.
+
+---
+
 ## Upgrade procedure
 
 ```bash

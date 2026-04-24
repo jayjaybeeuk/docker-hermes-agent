@@ -46,13 +46,25 @@ The dashboard waits for the gateway healthcheck before starting. The gateway exp
 - `HERMES_DATA_DIR` is created with `chmod 700` by `setup.sh`.
 - API keys are injected as environment variables at runtime, never baked into the image.
 
+## Two separate .env files — do not confuse them
+
+| File | Owner | Purpose |
+|---|---|---|
+| `docker-hermes-agent/.env` | Docker Compose | Port bindings, data dir paths, resource limits. Safe to edit directly. |
+| `~/.hermes/.env` | Hermes agent | LLM API keys, Telegram bot token, allowed users, platform config. Written by `hermes setup` — edit carefully. |
+
+Hermes reads credentials from `/opt/data/.env` (mounted from `~/.hermes/.env`), **not** from Docker container environment variables. To change Telegram allowed users, LLM keys, or platform tokens, edit `~/.hermes/.env` directly or re-run the setup wizard:
+```bash
+docker run -it --rm -v ~/.hermes:/opt/data nousresearch/hermes-agent setup
+```
+
 ## Key files
 
 | File | Purpose |
 |---|---|
 | `docker-compose.yml` | Stack definition — services, mounts, ports, resource limits |
-| `.env` | Local secrets and paths (gitignored, copied from `.env.example`) |
-| `.env.example` | Template — safe to commit, contains no real secrets |
+| `.env` | Docker Compose vars only — paths, ports, resource limits (gitignored) |
+| `.env.example` | Template for the Docker `.env` — safe to commit |
 | `Makefile` | Developer shortcuts wrapping `docker compose` |
 | `setup.sh` | Creates host directories, sets permissions, prints next steps |
 | `AGENTS.md` | Operational reference for humans and AI agents working this stack |
