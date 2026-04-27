@@ -8,8 +8,8 @@ if [ ! -f .env ]; then
 fi
 
 # Load only the two path variables we need
-HERMES_DATA_DIR=$(grep -E '^HERMES_DATA_DIR=' .env | cut -d= -f2- | sed "s|^~|$HOME|")
-HERMES_WORKSPACE_DIR=$(grep -E '^HERMES_WORKSPACE_DIR=' .env | cut -d= -f2- | sed "s|^~|$HOME|")
+HERMES_DATA_DIR=$(grep -E '^HERMES_DATA_DIR=' .env | cut -d= -f2- | tr -d '\r' | sed "s|^~|$HOME|")
+HERMES_WORKSPACE_DIR=$(grep -E '^HERMES_WORKSPACE_DIR=' .env | cut -d= -f2- | tr -d '\r' | sed "s|^~|$HOME|")
 
 if [ -z "$HERMES_DATA_DIR" ]; then
   echo "ERROR: HERMES_DATA_DIR is not set in .env" >&2
