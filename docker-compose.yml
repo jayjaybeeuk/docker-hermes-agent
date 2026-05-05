@@ -66,7 +66,7 @@ services:
       - type: bind
         source: ${HERMES_DATA_DIR:?HERMES_DATA_DIR must be set in .env}
         target: /opt/data
-        read_only: true
+        # read_only: kanban needs this, possibly a bug
     environment:
       # Points to the internal service name — never exposed to the host
       - GATEWAY_HEALTH_URL=http://hermes:8642
