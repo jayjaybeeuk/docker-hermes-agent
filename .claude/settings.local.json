@@ -12,7 +12,8 @@
       "Bash(docker exec *)",
       "Bash(docker run *)",
       "WebSearch",
-      "WebFetch(domain:hub.docker.com)"
+      "WebFetch(domain:hub.docker.com)",
+      "Bash(docker stats *)"
     ]
   }
 }

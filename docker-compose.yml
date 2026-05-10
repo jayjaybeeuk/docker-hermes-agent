@@ -55,6 +55,15 @@ services:
     image: nousresearch/hermes-agent:latest
     container_name: hermes-dashboard
     restart: unless-stopped
+    # Workaround for 0.12.0: /opt/hermes/ui-tui is owned by root in the image but the
+    # TUI build runs as the hermes user (after gosu drops root). Chown it first, then
+    # hand off to the original entrypoint. Remove once upstream ships a pre-built TUI.
+    user: root
+    entrypoint:
+      - /bin/bash
+      - -c
+      - chown -R hermes:hermes /opt/hermes/ui-tui && exec /usr/bin/tini -g -- /opt/hermes/docker/entrypoint.sh "$@"
+      - --
     # --insecure is required to bind 0.0.0.0 inside the container.
     # Security is enforced at the host layer: HERMES_BIND_ADDR=127.0.0.1
     # means the port is never reachable beyond localhost on the host machine.
@@ -71,6 +80,8 @@ services:
       # Points to the internal service name — never exposed to the host
       - GATEWAY_HEALTH_URL=http://hermes:8642
       - GATEWAY_HEALTH_TIMEOUT=3
+      - HERMES_DASHBOARD_TUI=1
+      - HERMES_TUI_DIR=${HERMES_TUI_DIR:-/opt/hermes/ui-tui}
     networks:
       - hermes-internal
     depends_on:
