@@ -13,7 +13,8 @@
       "Bash(docker run *)",
       "WebSearch",
       "WebFetch(domain:hub.docker.com)",
-      "Bash(docker stats *)"
+      "Bash(docker stats *)",
+      "Bash(curl -s http://127.0.0.1:8642/health)"
     ]
   }
 }

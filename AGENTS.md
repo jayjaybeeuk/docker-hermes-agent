@@ -22,14 +22,28 @@ The dashboard mounts it **read-only**. The workspace sub-directory (`HERMES_WORK
 
 ---
 
+## Two separate .env files — do not confuse them
+
+| File | Owner | Purpose |
+|---|---|---|
+| `docker-hermes-agent/.env` | Docker Compose | Port bindings, data dir paths, resource limits. Safe to edit directly. |
+| `~/.hermes/.env` | Hermes agent | LLM API keys, messaging platform tokens, allowed users. Written by `hermes setup` — edit carefully. |
+
+Hermes reads credentials from `/opt/data/.env` (mounted from `~/.hermes/.env`), **not** from Docker container environment variables. To change LLM keys, platform tokens, or allowed users, edit `~/.hermes/.env` directly or re-run the setup wizard:
+```bash
+docker run -it --rm -v ~/.hermes:/opt/data nousresearch/hermes-agent setup
+```
+
+---
+
 ## First-time setup
 
 ```bash
-cp .env.example .env          # then edit .env with your API keys and paths
+cp .env.example .env          # then edit .env with your paths and ports
 make setup                    # creates data/workspace dirs with correct permissions
 docker run -it --rm \
   -v "$HERMES_DATA_DIR:/opt/data" \
-  nousresearch/hermes-agent setup   # interactive config wizard
+  nousresearch/hermes-agent setup   # interactive config wizard (sets API keys, platform tokens)
 make up                       # start gateway + dashboard
 ```
 
@@ -73,8 +87,6 @@ make health      # curl the /health endpoint
 | `HERMES_BIND_ADDR` | Port binding address (`127.0.0.1` = localhost only) | `127.0.0.1` |
 | `HERMES_GATEWAY_PORT` | Host port for gateway API | `8642` |
 | `HERMES_DASHBOARD_PORT` | Host port for dashboard UI | `9119` |
-| `ANTHROPIC_API_KEY` | Anthropic API key | — |
-| `OPENAI_API_KEY` | OpenAI API key | — |
 | `HERMES_MEMORY_LIMIT` | Gateway container memory cap | `4G` |
 | `HERMES_CPU_LIMIT` | Gateway container CPU cap | `2.0` |
 | `HERMES_SHM_SIZE` | Shared memory for Playwright/browser tools | `1g` |
@@ -87,6 +99,8 @@ make health      # curl the /health endpoint
 - The agent has **no access to the host filesystem** beyond `HERMES_DATA_DIR` and `HERMES_WORKSPACE_DIR`. Do not add additional bind-mounts without understanding what the agent can do with them.
 - The dashboard mount is **read-only** — it cannot modify agent state.
 - No privileged mode; no host networking.
+- `HERMES_DATA_DIR` is created with `chmod 700` by `setup.sh`.
+- API keys are injected via `~/.hermes/.env` at runtime, never baked into the image.
 
 ---
 
@@ -98,6 +112,47 @@ HERMES_DATA_DIR=/home/youruser/.hermes
 HERMES_WORKSPACE_DIR=/home/youruser/.hermes/workspace
 ```
 Avoid mounting Windows NTFS paths (`/mnt/c/...`) for the data dir — `chmod 700` will not behave correctly on NTFS.
+
+---
+
+## Troubleshooting
+
+### Agent not responding / gateway unhealthy
+
+If `docker compose ps` shows the `hermes` container as `unhealthy`, or the gateway logs show `No messaging platforms enabled`, perform a clean restart:
+
+```bash
+make down && make up
+```
+
+This clears transient state that can accumulate after long-running sessions (the gateway health check looks for `/opt/data/gateway.pid`, which may not be written if startup is interrupted). A clean restart is sufficient in most cases — no data is lost.
+
+If the gateway comes up but immediately shows `No messaging platforms enabled`, the credentials in `~/.hermes/.env` are missing or incomplete. Re-run the setup wizard:
+```bash
+docker run -it --rm -v ~/.hermes:/opt/data nousresearch/hermes-agent setup
+```
+
+### Checking gateway health manually
+
+```bash
+make health          # curl /health endpoint
+docker compose ps    # check container status
+make logs            # tail gateway logs
+docker exec hermes sh -c "cat /opt/data/logs/gateway.log | tail -50"
+```
+
+---
+
+## Upgrade procedure
+
+```bash
+make upgrade
+# Equivalent to:
+docker pull nousresearch/hermes-agent:latest
+docker compose up -d --force-recreate
+```
+
+Data in `HERMES_DATA_DIR` is preserved across upgrades.
 
 ---
 
@@ -150,20 +205,3 @@ make up
 | Memories, sessions, skills | Container image (re-pulled automatically) |
 | Credentials, config, personality (`SOUL.md`) | Any data outside `HERMES_DATA_DIR` |
 | Cron jobs, hooks, logs | Host-specific absolute paths in `config.yaml` |
-
-### Windows (WSL2) path note
-
-Use Linux-style paths inside the WSL2 filesystem — avoid `/mnt/c/...` NTFS mounts. `chmod 700` (applied by `setup.sh`) does not behave correctly on NTFS.
-
----
-
-## Upgrade procedure
-
-```bash
-make upgrade
-# Equivalent to:
-docker pull nousresearch/hermes-agent:latest
-docker compose up -d --force-recreate
-```
-
-Data in `HERMES_DATA_DIR` is preserved across upgrades.
